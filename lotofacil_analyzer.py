@@ -222,35 +222,238 @@ class AnalisadorLotofacil:
         
         return sorted(numeros_selecionados)
     
+    def jogo_pares_impares_equilibrado(self):
+        """
+        Jogo 4: Baseado no equilíbrio entre pares e ímpares.
+        Estatisticamente, jogos muito desequilibrados são raros.
+        """
+        print("\n=== JOGO 4: EQUILÍBRIO PARES/ÍMPARES ===")
+        
+        # Analisa distribuição histórica de pares/ímpares
+        dist_pares = []
+        for jogo in self.historico_numeros:
+            qtd_pares = sum(1 for n in jogo if n % 2 == 0)
+            dist_pares.append(qtd_pares)
+        
+        # Encontra a distribuição mais comum
+        contador_dist = Counter(dist_pares)
+        qtd_pares_ideal = contador_dist.most_common(1)[0][0]
+        qtd_impares_ideal = 15 - qtd_pares_ideal
+        
+        print(f"Distribuição mais comum: {qtd_pares_ideal} pares e {qtd_impares_ideal} ímpares")
+        print(f"Ocorreu {contador_dist[qtd_pares_ideal]} vezes ({contador_dist[qtd_pares_ideal]/len(self.historico_numeros)*100:.1f}%)")
+        
+        # Seleciona os números mais frequentes respeitando o equilíbrio
+        todos = [num for jogo in self.historico_numeros for num in jogo]
+        contador = Counter(todos)
+        
+        pares = sorted([n for n in self.todos_numeros if n % 2 == 0], 
+                      key=lambda x: contador[x], reverse=True)
+        impares = sorted([n for n in self.todos_numeros if n % 2 != 0], 
+                        key=lambda x: contador[x], reverse=True)
+        
+        jogo = sorted(pares[:qtd_pares_ideal] + impares[:qtd_impares_ideal])
+        
+        print(f"\nNúmeros selecionados: {jogo}")
+        print(f"Pares: {[n for n in jogo if n % 2 == 0]}")
+        print(f"Ímpares: {[n for n in jogo if n % 2 != 0]}")
+        
+        return jogo
+    
+    def jogo_sequencias_repeticoes(self):
+        """
+        Jogo 5: Baseado em números que repetem do último sorteio.
+        Analisa quantos números costumam repetir entre sorteios consecutivos.
+        """
+        print("\n=== JOGO 5: ANÁLISE DE REPETIÇÕES ===")
+        
+        # Analisa quantos números repetem entre sorteios consecutivos
+        repeticoes = []
+        for i in range(1, len(self.historico_numeros)):
+            jogo_anterior = set(self.historico_numeros[i-1])
+            jogo_atual = set(self.historico_numeros[i])
+            qtd_repeticoes = len(jogo_anterior & jogo_atual)
+            repeticoes.append(qtd_repeticoes)
+        
+        media_repeticoes = int(np.mean(repeticoes))
+        print(f"Média de números que repetem: {media_repeticoes}")
+        print(f"Mínimo: {min(repeticoes)} | Máximo: {max(repeticoes)}")
+        
+        # Pega o último sorteio
+        ultimo_jogo = set(self.historico_numeros[-1])
+        print(f"\nÚltimo sorteio: {sorted(ultimo_jogo)}")
+        
+        # Calcula frequência dos números (exceto os do último jogo)
+        todos_exceto_ultimo = [num for jogo in self.historico_numeros[:-1] for num in jogo]
+        contador = Counter(todos_exceto_ultimo)
+        
+        # Seleciona números do último jogo (baseado na média de repetições)
+        numeros_ultimo_ordenados = sorted(ultimo_jogo, 
+                                         key=lambda x: contador[x], 
+                                         reverse=True)
+        numeros_repetidos = numeros_ultimo_ordenados[:media_repeticoes]
+        
+        # Completa com números novos (não do último jogo) mais frequentes
+        numeros_novos = [n for n in self.todos_numeros if n not in ultimo_jogo]
+        numeros_novos_ordenados = sorted(numeros_novos, 
+                                        key=lambda x: contador[x], 
+                                        reverse=True)
+        
+        qtd_novos = 15 - len(numeros_repetidos)
+        jogo = sorted(numeros_repetidos + numeros_novos_ordenados[:qtd_novos])
+        
+        print(f"\nRepetidos do último: {sorted(numeros_repetidos)}")
+        print(f"Números novos: {sorted(numeros_novos_ordenados[:qtd_novos])}")
+        print(f"Jogo completo: {jogo}")
+        
+        return jogo
+    
+    def jogo_distribuicao_espacial(self):
+        """
+        Jogo 6: Baseado na distribuição espacial (faixas de números).
+        Divide em 5 faixas (1-5, 6-10, 11-15, 16-20, 21-25).
+        """
+        print("\n=== JOGO 6: DISTRIBUIÇÃO ESPACIAL ===")
+        
+        faixas = {
+            '01-05': list(range(1, 6)),
+            '06-10': list(range(6, 11)),
+            '11-15': list(range(11, 16)),
+            '16-20': list(range(16, 21)),
+            '21-25': list(range(21, 26))
+        }
+        
+        # Analisa quantos números por faixa aparecem em média
+        dist_faixas = {f: [] for f in faixas.keys()}
+        
+        for jogo in self.historico_numeros:
+            for nome_faixa, numeros_faixa in faixas.items():
+                qtd_na_faixa = sum(1 for n in jogo if n in numeros_faixa)
+                dist_faixas[nome_faixa].append(qtd_na_faixa)
+        
+        # Calcula média por faixa
+        print("Distribuição média por faixa:")
+        medias_faixa = {}
+        for nome_faixa, valores in dist_faixas.items():
+            media = int(round(np.mean(valores)))
+            medias_faixa[nome_faixa] = media
+            print(f"  Faixa {nome_faixa}: {media} números (média: {np.mean(valores):.2f})")
+        
+        # Seleciona números mais frequentes de cada faixa
+        todos = [num for jogo in self.historico_numeros for num in jogo]
+        contador = Counter(todos)
+        
+        jogo = []
+        for nome_faixa, numeros_faixa in faixas.items():
+            qtd_selecionar = medias_faixa[nome_faixa]
+            nums_ordenados = sorted(numeros_faixa, 
+                                   key=lambda x: contador[x], 
+                                   reverse=True)
+            jogo.extend(nums_ordenados[:qtd_selecionar])
+        
+        jogo = sorted(jogo)
+        
+        print(f"\nNúmeros selecionados: {jogo}")
+        for nome_faixa, numeros_faixa in faixas.items():
+            nums_na_faixa = [n for n in jogo if n in numeros_faixa]
+            print(f"  Faixa {nome_faixa}: {nums_na_faixa}")
+        
+        return jogo
+    
+    def jogo_machine_learning_scoring(self):
+        """
+        Jogo 7: Sistema de pontuação combinando múltiplos critérios.
+        Modelo híbrido que pondera diferentes análises.
+        """
+        print("\n=== JOGO 7: SCORING MULTIFATORIAL ===")
+        
+        scores = {n: 0 for n in self.todos_numeros}
+        
+        # Critério 1: Frequência geral (peso 25%)
+        todos = [num for jogo in self.historico_numeros for num in jogo]
+        contador = Counter(todos)
+        max_freq = max(contador.values())
+        for num in self.todos_numeros:
+            scores[num] += (contador[num] / max_freq) * 25
+        
+        # Critério 2: Tendência recente - últimos 50 jogos (peso 30%)
+        recentes = [num for jogo in self.historico_numeros[-50:] for num in jogo]
+        contador_recente = Counter(recentes)
+        max_freq_recente = max(contador_recente.values()) if contador_recente else 1
+        for num in self.todos_numeros:
+            scores[num] += (contador_recente.get(num, 0) / max_freq_recente) * 30
+        
+        # Critério 3: Análise de padrão (peso 25%)
+        for num in self.todos_numeros:
+            stats = self._analisar_padroes_numero(num)
+            prob_padrao = self.calcular_probabilidade_proximo(stats)
+            scores[num] += (prob_padrao / 100) * 25
+        
+        # Critério 4: Números "quentes" - apareceram nos últimos 5 sorteios (peso 20%)
+        ultimos_5 = [num for jogo in self.historico_numeros[-5:] for num in jogo]
+        contador_quentes = Counter(ultimos_5)
+        for num in self.todos_numeros:
+            if contador_quentes.get(num, 0) >= 2:  # Apareceu 2+ vezes
+                scores[num] += 20
+            elif contador_quentes.get(num, 0) == 1:
+                scores[num] += 10
+        
+        # Ordena por score
+        ranking = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        
+        print("Top 15 números com maior score:\n")
+        for i, (num, score) in enumerate(ranking[:15], 1):
+            freq_total = contador[num]
+            freq_recente = contador_recente.get(num, 0)
+            print(f"  {i:2d}. Número {num:2d}: {score:5.1f} pontos "
+                  f"(Total: {freq_total}, Recente: {freq_recente})")
+        
+        jogo = sorted([num for num, _ in ranking[:15]])
+        print(f"\nJogo selecionado: {jogo}")
+        
+        return jogo
+    
     def gerar_todos_jogos(self):
-        """Gera os 3 jogos e retorna um resumo."""
+        """Gera os 7 jogos e retorna um resumo."""
         print("=" * 60)
-        print("ANALISADOR LOTOFÁCIL")
+        print("ANALISADOR LOTOFÁCIL - VERSÃO COMPLETA")
         print(f"Total de sorteios analisados: {len(self.historico_numeros)}")
         print("=" * 60)
         
         jogo1 = self.jogo_mais_sorteados()
         jogo2 = self.jogo_menos_sorteados()
         jogo3 = self.jogo_probabilidade_padrao()
+        jogo4 = self.jogo_pares_impares_equilibrado()
+        jogo5 = self.jogo_sequencias_repeticoes()
+        jogo6 = self.jogo_distribuicao_espacial()
+        jogo7 = self.jogo_machine_learning_scoring()
         
-        print("\n" + "=" * 60)
+        print("\n" + "=" * 70)
         print("RESUMO DOS JOGOS")
-        print("=" * 60)
-        print(f"\nJogo 1 (Mais sorteados):     {jogo1}")
-        print(f"Jogo 2 (Menos sorteados):    {jogo2}")
-        print(f"Jogo 3 (Padrão/Probabilid.): {jogo3}")
+        print("=" * 70)
+        print(f"\nJogo 1 (Mais sorteados):        {jogo1}")
+        print(f"Jogo 2 (Menos sorteados):       {jogo2}")
+        print(f"Jogo 3 (Padrão/Probabilid.):    {jogo3}")
+        print(f"Jogo 4 (Equilíbrio Par/Ímpar):  {jogo4}")
+        print(f"Jogo 5 (Repetições):            {jogo5}")
+        print(f"Jogo 6 (Distribuição Espacial): {jogo6}")
+        print(f"Jogo 7 (Scoring Multifatorial): {jogo7}")
         
         return {
             'jogo1_mais_sorteados': jogo1,
             'jogo2_menos_sorteados': jogo2,
-            'jogo3_probabilidade': jogo3
+            'jogo3_probabilidade': jogo3,
+            'jogo4_pares_impares': jogo4,
+            'jogo5_repeticoes': jogo5,
+            'jogo6_distribuicao': jogo6,
+            'jogo7_scoring': jogo7
         }
 
 
 # EXEMPLO DE USO
 if __name__ == "__main__":
     # Substitua pelo caminho do seu arquivo CSV
-    arquivo = "lotofacil20251006.csv"
+    arquivo = "historico_lotofacil.csv"
     
     try:
         analisador = AnalisadorLotofacil(arquivo)
@@ -260,9 +463,13 @@ if __name__ == "__main__":
         with open("jogos_gerados.txt", "w", encoding="utf-8") as f:
             f.write("JOGOS LOTOFÁCIL GERADOS\n")
             f.write("=" * 50 + "\n\n")
-            f.write(f"Jogo 1 (Mais sorteados):     {jogos['jogo1_mais_sorteados']}\n")
-            f.write(f"Jogo 2 (Menos sorteados):    {jogos['jogo2_menos_sorteados']}\n")
-            f.write(f"Jogo 3 (Padrão/Probabilid.): {jogos['jogo3_probabilidade']}\n")
+            f.write(f"Jogo 1 (Mais sorteados):          {jogos['jogo1_mais_sorteados']}\n")
+            f.write(f"Jogo 2 (Menos sorteados):         {jogos['jogo2_menos_sorteados']}\n")
+            f.write(f"Jogo 3 (Padrão/Probabilid.):      {jogos['jogo3_probabilidade']}\n")
+            f.write(f"Jogo 4 (Equilíbrio Par/Ímpar):    {jogos['jogo4_pares_impares']}\n")
+            f.write(f"Jogo 5 (Repetições):              {jogos['jogo5_repeticoes']}\n")
+            f.write(f"Jogo 6 (Distribuição Espacial):   {jogos['jogo6_distribuicao']}\n")
+            f.write(f"Jogo 7 (Scoring Multifatorial):   {jogos['jogo7_scoring']}\n")
         
         print("\n✓ Jogos salvos em 'jogos_gerados.txt'")
         
