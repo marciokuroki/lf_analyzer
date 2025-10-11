@@ -2,6 +2,42 @@ import pandas as pd
 import numpy as np
 from collections import Counter, defaultdict
 from datetime import datetime
+import os
+
+def converter_xlsx_para_csv(arquivo_xlsx, arquivo_csv_saida=None):
+    """
+    Converte arquivo XLSX para CSV com separador ponto e vírgula.
+    
+    Args:
+        arquivo_xlsx: Caminho do arquivo Excel (.xlsx)
+        arquivo_csv_saida: Nome do arquivo CSV de saída (opcional)
+                          Se não informado, usa o mesmo nome com extensão .csv
+    
+    Returns:
+        str: Caminho do arquivo CSV gerado
+    """
+    print(f"🔄 Convertendo {arquivo_xlsx} para CSV...")
+    
+    # Define nome do arquivo de saída
+    if arquivo_csv_saida is None:
+        arquivo_csv_saida = arquivo_xlsx.rsplit('.', 1)[0] + '.csv'
+    
+    try:
+        # Lê o arquivo Excel
+        df = pd.read_excel(arquivo_xlsx)
+        
+        # Salva como CSV com separador ponto e vírgula
+        df.to_csv(arquivo_csv_saida, sep=';', index=False, encoding='latin-1')
+        
+        print(f"✅ Arquivo convertido com sucesso: {arquivo_csv_saida}")
+        print(f"   Total de linhas: {len(df)}")
+        print(f"   Total de colunas: {len(df.columns)}")
+        
+        return arquivo_csv_saida
+        
+    except Exception as e:
+        print(f"❌ Erro ao converter arquivo: {e}")
+        raise
 
 class AnalisadorLotofacil:
     def __init__(self, arquivo_csv):
@@ -452,30 +488,44 @@ class AnalisadorLotofacil:
 
 # EXEMPLO DE USO
 if __name__ == "__main__":
-    # Substitua pelo caminho do seu arquivo CSV
-    arquivo = "historico_lotofacil.csv"
+    # Substitua pelo caminho do seu arquivo XLSX ou CSV
+    arquivo_entrada = "historico_lotofacil.xlsx"  # ou "historico_lotofacil.csv"
     
     try:
-        analisador = AnalisadorLotofacil(arquivo)
+        # Verifica se é XLSX e converte automaticamente
+        if arquivo_entrada.lower().endswith('.xlsx'):
+            print("📁 Arquivo Excel detectado!")
+            arquivo_csv = converter_xlsx_para_csv(arquivo_entrada)
+            print()
+        elif arquivo_entrada.lower().endswith('.csv'):
+            print("📁 Arquivo CSV detectado!")
+            arquivo_csv = arquivo_entrada
+        else:
+            print("❌ Formato não suportado! Use .xlsx ou .csv")
+            exit(1)
+        
+        # Analisa os dados
+        analisador = AnalisadorLotofacil(arquivo_csv)
         jogos = analisador.gerar_todos_jogos()
         
         # Salvar jogos em arquivo
         with open("jogos_gerados.txt", "w", encoding="utf-8") as f:
             f.write("JOGOS LOTOFÁCIL GERADOS\n")
-            f.write("=" * 50 + "\n\n")
-            f.write(f"Jogo 1 (Mais sorteados):          {jogos['jogo1_mais_sorteados']}\n")
-            f.write(f"Jogo 2 (Menos sorteados):         {jogos['jogo2_menos_sorteados']}\n")
-            f.write(f"Jogo 3 (Padrão/Probabilid.):      {jogos['jogo3_probabilidade']}\n")
-            f.write(f"Jogo 4 (Equilíbrio Par/Ímpar):    {jogos['jogo4_pares_impares']}\n")
-            f.write(f"Jogo 5 (Repetições):              {jogos['jogo5_repeticoes']}\n")
-            f.write(f"Jogo 6 (Distribuição Espacial):   {jogos['jogo6_distribuicao']}\n")
-            f.write(f"Jogo 7 (Scoring Multifatorial):   {jogos['jogo7_scoring']}\n")
+            f.write("=" * 70 + "\n\n")
+            f.write(f"Jogo 1 (Mais sorteados):        {jogos['jogo1_mais_sorteados']}\n")
+            f.write(f"Jogo 2 (Menos sorteados):       {jogos['jogo2_menos_sorteados']}\n")
+            f.write(f"Jogo 3 (Padrão/Probabilid.):    {jogos['jogo3_probabilidade']}\n")
+            f.write(f"Jogo 4 (Equilíbrio Par/Ímpar):  {jogos['jogo4_pares_impares']}\n")
+            f.write(f"Jogo 5 (Repetições):            {jogos['jogo5_repeticoes']}\n")
+            f.write(f"Jogo 6 (Distribuição Espacial): {jogos['jogo6_distribuicao']}\n")
+            f.write(f"Jogo 7 (Scoring Multifatorial): {jogos['jogo7_scoring']}\n")
         
-        print("\n✓ Jogos salvos em 'jogos_gerados.txt'")
+        print("\n✅ Jogos salvos em 'jogos_gerados.txt'")
         
     except FileNotFoundError:
-        print(f"Erro: Arquivo '{arquivo}' não encontrado!")
-        print("\nFormato esperado do CSV:")
-        print("- Cada linha = um sorteio")
-        print("- Colunas com os 15 números sorteados")
-        print("- Exemplo: Concurso,Data,Bola1,Bola2,...,Bola15")
+        print(f"❌ Erro: Arquivo '{arquivo_entrada}' não encontrado!")
+        print("\nFormatos aceitos:")
+        print("  • Excel (.xlsx)")
+        print("  • CSV com separador ';' (.csv)")
+    except Exception as e:
+        print(f"❌ Erro ao processar: {e}")
