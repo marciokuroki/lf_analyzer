@@ -49,7 +49,7 @@ def test_jogo_mais_sorteados(analisador_mock: AnalisadorLotofacil):
     # Com nosso histórico mock, os números 1, 2, 3 aparecem 3 vezes.
     # Outros aparecem 2 vezes. O resto, 1 vez.
     # A função deve retornar os 15 mais frequentes.
-    resultado = analisador_mock.jogo_mais_sorteados()
+    resultado, _ = analisador_mock.jogo_mais_sorteados()
     
     # Os números 1, 2, 3 DEVEM estar na lista
     assert 1 in resultado
@@ -70,7 +70,7 @@ def test_jogo_mais_sorteados(analisador_mock: AnalisadorLotofacil):
 
 def test_jogo_menos_sorteados(analisador_mock: AnalisadorLotofacil):
     """Testa a lógica para encontrar os números menos sorteados."""
-    resultado = analisador_mock.jogo_menos_sorteados()
+    resultado, _ = analisador_mock.jogo_menos_sorteados()
     
     # Números que aparecem apenas 1 vez: 12, 13, 14, 15, 21, 22, 23, 24
     # Todos eles devem estar na lista dos menos sorteados.
@@ -98,7 +98,7 @@ def test_jogo_pares_impares_equilibrado(analisador_mock: AnalisadorLotofacil):
     # Assumindo que o `Counter` pega o último que viu em caso de empate, seria 8.
     # Qtd Pares Ideal = 8, Qtd Ímpares Ideal = 7
     
-    resultado = analisador_mock.jogo_pares_impares_equilibrado()
+    resultado, _ = analisador_mock.jogo_pares_impares_equilibrado()
     
     qtd_pares = sum(1 for n in resultado if n % 2 == 0)
     qtd_impares = sum(1 for n in resultado if n % 2 != 0)
@@ -155,7 +155,7 @@ def test_jogo_machine_learning_scoring(analisador_mock: AnalisadorLotofacil):
     Testa a lógica de pontuação do jogo de machine learning.
     Verifica se os números mais e menos frequentes recebem scores coerentes.
     """
-    resultado = analisador_mock.jogo_machine_learning_scoring()
+    resultado, _ = analisador_mock.jogo_machine_learning_scoring()
 
     # No nosso mock, o número 1 é o mais frequente e sempre presente.
     # Deve estar na lista final.
