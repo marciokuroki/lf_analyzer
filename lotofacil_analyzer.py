@@ -117,19 +117,21 @@ class AnalisadorLotofacil:
             else:
                 sequencias_ausente.append(seq_atual)
         
-        # Verifica situação atual (últimos sorteios)
+        # Verifica a situação atual (sequência de presença ou ausência no final do histórico)
         sorteios_sem_aparecer = 0
         sorteios_aparecendo = 0
-        
-        for i in range(len(aparicoes) - 1, -1, -1):
-            if aparicoes[i] == 0:
-                sorteios_sem_aparecer += 1
-                if sorteios_aparecendo > 0:
-                    break
-            else:
-                sorteios_aparecendo += 1
-                if sorteios_sem_aparecer > 0:
-                    break
+        apareceu_ultimo = aparicoes[-1] == 1 if aparicoes else False
+
+        if apareceu_ultimo:
+            # Se apareceu no último, conta a sequência atual de aparições
+            for presente in reversed(aparicoes):
+                if presente == 1: sorteios_aparecendo += 1
+                else: break
+        else:
+            # Se não apareceu, conta a sequência atual de ausências
+            for presente in reversed(aparicoes):
+                if presente == 0: sorteios_sem_aparecer += 1
+                else: break
         
         return {
             'numero': numero,
@@ -140,7 +142,7 @@ class AnalisadorLotofacil:
             'max_seq_ausente': max(sequencias_ausente) if sequencias_ausente else 0,
             'sorteios_sem_aparecer': sorteios_sem_aparecer,
             'sorteios_aparecendo': sorteios_aparecendo,
-            'apareceu_ultimo': aparicoes[-1] == 1
+            'apareceu_ultimo': apareceu_ultimo
         }
     
     def calcular_probabilidade_proximo(self, stats):
