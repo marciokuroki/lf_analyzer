@@ -2,7 +2,17 @@ import pandas as pd
 import numpy as np
 from collections import Counter, defaultdict
 from datetime import datetime
+from sklearn.cluster import KMeans
 import os
+
+# Tenta importar o TensorFlow. Se não estiver disponível, o modelo LSTM será desativado.
+try:
+    import tensorflow as tf
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import LSTM, Dense, Dropout
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
 
 def converter_xlsx_para_csv(arquivo_xlsx, arquivo_csv_saida=None):
     """
@@ -429,40 +439,167 @@ class AnalisadorLotofacil:
         jogo = sorted([num for num, _ in ranking[:15]])
         return jogo, detalhes
     
+    def jogo_clusterizacao_kmeans(self, n_clusters_override=None):
+        """
+        Jogo 8: Clusterização (Agrupamento) de Jogos usando K-Means.
+        Agrupa jogos históricos em clusters e sugere um jogo baseado no centróide
+        do cluster mais representativo (o maior cluster).
+        """
+        detalhes = ["Analisando padrões de agrupamento de jogos com K-Means..."]
+        
+        if not self.historico_numeros:
+            detalhes.append("Histórico de jogos vazio para clusterização.")
+            return [], detalhes
+
+        # 1. Vetorização dos Jogos: Converter cada sorteio em um vetor binário de 25 posições.
+        #    Ex: [1, 2, 3, ..., 15] -> [1, 1, 1, 0, 0, ..., 1, 0, 0]
+        dados_para_kmeans = np.zeros((len(self.historico_numeros), 25))
+        for i, jogo in enumerate(self.historico_numeros):
+            for numero in jogo:
+                dados_para_kmeans[i, numero - 1] = 1 # -1 porque os números são de 1 a 25, índices de 0 a 24
+
+        # 2. Aplicar K-Means
+        #    Escolhemos um número razoável de clusters (K).
+        #    Em um cenário real, você poderia usar o método do cotovelo ou silhouette score
+        #    para encontrar o K ideal. Para este exemplo, K=5.
+        n_clusters = n_clusters_override if n_clusters_override is not None else 5
+        try:
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10) # n_init para evitar warnings
+            kmeans.fit(dados_para_kmeans)
+            
+            # 3. Análise dos Clusters: Encontrar o maior cluster
+            cluster_labels = kmeans.labels_
+            cluster_counts = Counter(cluster_labels)
+            
+            # Encontrar o cluster com mais jogos
+            maior_cluster_id = cluster_counts.most_common(1)[0][0]
+            detalhes.append(f"Identificados {n_clusters} clusters. O maior cluster é o {maior_cluster_id} com {cluster_counts[maior_cluster_id]} jogos.")
+            
+            # 4. Obter o centróide do maior cluster
+            #    O centróide representa o "jogo médio" daquele cluster.
+            centroid_maior_cluster = kmeans.cluster_centers_[maior_cluster_id]
+            
+            # 5. Selecionar os 15 números com maior "probabilidade" (valor no centróide)
+            #    Os valores do centróide são floats entre 0 e 1, representando a frequência média
+            #    de cada número naquele cluster.
+            numeros_com_prob = [(i + 1, prob) for i, prob in enumerate(centroid_maior_cluster)]
+            numeros_com_prob.sort(key=lambda x: x[1], reverse=True)
+            
+            jogo_sugerido = sorted([num for num, _ in numeros_com_prob[:15]])
+            detalhes.append(f"Centróide do maior cluster: {['{:.2f}'.format(p) for p in centroid_maior_cluster]}")
+            detalhes.append(f"Top 15 números do centróide: {jogo_sugerido}")
+            
+            return jogo_sugerido, detalhes
+            
+        except Exception as e:
+            detalhes.append(f"❌ Erro ao executar K-Means: {e}")
+            return [], detalhes
+
+    def jogo_series_temporais_lstm(self):
+        """
+        Jogo 9: Previsão com Rede Neural LSTM (Long Short-Term Memory).
+        """
+        if not TENSORFLOW_AVAILABLE:
+            return [], ["TensorFlow não está instalado. Modelo LSTM desativado.", "Execute: pip install tensorflow"]
+
+        detalhes = ["Analisando o histórico com Rede Neural LSTM..."]
+        sequence_length = 10  # Usar 10 sorteios para prever o próximo
+
+        if len(self.historico_numeros) < sequence_length + 1:
+            return [], [f"Histórico insuficiente. São necessários pelo menos {sequence_length + 1} sorteios."]
+
+        # 1. Pré-processamento: Vetorização e criação de sequências
+        # Converte cada jogo para um vetor binário de 25 posições
+        dados_vetorizados = np.array([
+            np.isin(self.todos_numeros, jogo).astype(int) for jogo in self.historico_numeros
+        ])
+
+        X, y = [], []
+        for i in range(len(dados_vetorizados) - sequence_length):
+            X.append(dados_vetorizados[i:(i + sequence_length)])
+            y.append(dados_vetorizados[i + sequence_length])
+        
+        X, y = np.array(X), np.array(y)
+
+        # 2. Construção do Modelo LSTM
+        model = Sequential([
+            LSTM(50, return_sequences=True, input_shape=(sequence_length, 25)),
+            Dropout(0.2),
+            LSTM(50),
+            Dropout(0.2),
+            Dense(25, activation='sigmoid') # Camada de saída com 25 neurônios e ativação sigmoid
+        ])
+
+        # 3. Compilação do Modelo
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        detalhes.append(f"Modelo LSTM criado. Treinando com {len(X)} amostras...")
+
+        # 4. Treinamento
+        # Para um resultado real, aumente as épocas e use um conjunto de validação.
+        # Aqui, treinamos de forma simples para demonstração.
+        try:
+            model.fit(X, y, epochs=20, batch_size=32, verbose=0) # verbose=0 para não poluir a saída
+            detalhes.append("Treinamento concluído.")
+        except Exception as e:
+            return [], [f"Erro durante o treinamento do modelo: {e}"]
+
+        # 5. Previsão
+        # Pega a última sequência do histórico para prever o próximo jogo
+        ultima_sequencia = np.array([dados_vetorizados[-sequence_length:]])
+        previsao_prob = model.predict(ultima_sequencia)[0]
+
+        # 6. Geração do Jogo
+        # Associa cada probabilidade ao seu número correspondente
+        numeros_com_prob = sorted(zip(self.todos_numeros, previsao_prob), key=lambda item: item[1], reverse=True)
+        
+        jogo_sugerido = sorted([num for num, prob in numeros_com_prob[:15]])
+        
+        detalhes.append("\nTop 15 números previstos pela LSTM (com probabilidade):")
+        for num, prob in numeros_com_prob[:15]:
+            detalhes.append(f"  Número {num:2d}: {prob*100:.2f}%")
+
+        return jogo_sugerido, detalhes
+
     def gerar_todos_jogos(self):
-        """Gera os 7 jogos e retorna um resumo."""
+        """Gera todos os jogos e retorna um resumo."""
         print("=" * 60)
         print("ANALISADOR LOTOFÁCIL - VERSÃO COMPLETA")
         print(f"Total de sorteios analisados: {len(self.historico_numeros)}")
         print("=" * 60)
         
-        jogos = {}
+        # Dicionário para armazenar os jogos e seus detalhes
+        jogos_com_detalhes = {}
         
-        jogos['jogo1_mais_sorteados'], detalhes1 = self.jogo_mais_sorteados()
-        jogos['jogo2_menos_sorteados'], detalhes2 = self.jogo_menos_sorteados()
-        jogos['jogo3_probabilidade'], detalhes3 = self.jogo_probabilidade_padrao()
-        jogos['jogo4_pares_impares'], detalhes4 = self.jogo_pares_impares_equilibrado()
-        jogos['jogo5_repeticoes'], detalhes5 = self.jogo_sequencias_repeticoes()
-        jogos['jogo6_distribuicao'], detalhes6 = self.jogo_distribuicao_espacial()
-        jogos['jogo7_scoring'], detalhes7 = self.jogo_machine_learning_scoring()
+        jogos_com_detalhes['jogo1_mais_sorteados'] = self.jogo_mais_sorteados()
+        jogos_com_detalhes['jogo2_menos_sorteados'] = self.jogo_menos_sorteados()
+        jogos_com_detalhes['jogo3_probabilidade'] = self.jogo_probabilidade_padrao()
+        jogos_com_detalhes['jogo4_pares_impares'] = self.jogo_pares_impares_equilibrado()
+        jogos_com_detalhes['jogo5_repeticoes'] = self.jogo_sequencias_repeticoes()
+        jogos_com_detalhes['jogo6_distribuicao'] = self.jogo_distribuicao_espacial()
+        jogos_com_detalhes['jogo7_scoring'] = self.jogo_machine_learning_scoring()
+        jogos_com_detalhes['jogo8_clusterizacao_kmeans'] = self.jogo_clusterizacao_kmeans()
+        jogos_com_detalhes['jogo9_series_temporais_lstm'] = self.jogo_series_temporais_lstm()
 
         # Imprime os resultados de forma organizada
-        for i, (nome, jogo) in enumerate(jogos.items(), 1):
-            detalhes = locals()[f'detalhes{i}']
-            self._imprimir_jogo(f"JOGO {i}: {nome.split('_')[1].replace('-', ' ').title()}", jogo, detalhes)
+        jogos_finais = {} # Dicionário para o resumo final (apenas os números)
+        for i, (nome_chave, (jogo_numeros, jogo_detalhes)) in enumerate(jogos_com_detalhes.items(), 1):
+            # Extrai um título mais legível da chave (ex: 'jogo1_mais_sorteados' -> 'Mais Sorteados')
+            partes_nome = nome_chave.split('_')
+            titulo_display = " ".join(partes_nome[1:]).replace('-', ' ').title()
+            
+            self._imprimir_jogo(f"JOGO {i}: {titulo_display}", jogo_numeros, jogo_detalhes)
+            jogos_finais[nome_chave] = jogo_numeros # Armazena apenas os números para o resumo
         
         print("\n" + "=" * 70)
         print("RESUMO DOS JOGOS")
         print("=" * 70)
-        print(f"\nJogo 1 (Mais sorteados):        {jogo1}")
-        print(f"Jogo 2 (Menos sorteados):       {jogo2}")
-        print(f"Jogo 3 (Padrão/Probabilid.):    {jogo3}")
-        print(f"Jogo 4 (Equilíbrio Par/Ímpar):  {jogo4}")
-        print(f"Jogo 5 (Repetições):            {jogo5}")
-        print(f"Jogo 6 (Distribuição Espacial): {jogo6}")
-        print(f"Jogo 7 (Scoring Multifatorial): {jogo7}")
+        for nome_chave, jogo_numeros in jogos_finais.items():
+            partes_nome = nome_chave.split('_')
+            # Formata o título para o resumo (ex: "Jogo 1 (Mais Sorteados)")
+            titulo_resumo = " ".join(partes_nome[1:]).replace('-', ' ').title()
+            print(f"Jogo {partes_nome[0][4:]} ({titulo_resumo}): {jogo_numeros}")
         
-        return jogos
+        return jogos_finais       
 
 # EXEMPLO DE USO
 if __name__ == "__main__":
@@ -484,21 +621,23 @@ if __name__ == "__main__":
         
         # Analisa os dados
         analisador = AnalisadorLotofacil(arquivo_csv)
-        jogos = analisador.gerar_todos_jogos()
+        jogos_gerados = analisador.gerar_todos_jogos()
         
         # Salvar jogos em arquivo
         with open("jogos_gerados.txt", "w", encoding="utf-8") as f:
             f.write("JOGOS LOTOFÁCIL GERADOS\n")
             f.write("=" * 70 + "\n\n")
-            f.write(f"Jogo 1 (Mais sorteados):        {jogos['jogo1_mais_sorteados']}\n")
-            f.write(f"Jogo 2 (Menos sorteados):       {jogos['jogo2_menos_sorteados']}\n")
-            f.write(f"Jogo 3 (Padrão/Probabilid.):    {jogos['jogo3_probabilidade']}\n")
-            f.write(f"Jogo 4 (Equilíbrio Par/Ímpar):  {jogos['jogo4_pares_impares']}\n")
-            f.write(f"Jogo 5 (Repetições):            {jogos['jogo5_repeticoes']}\n")
-            f.write(f"Jogo 6 (Distribuição Espacial): {jogos['jogo6_distribuicao']}\n")
-            f.write(f"Jogo 7 (Scoring Multifatorial): {jogos['jogo7_scoring']}\n")
+            f.write(f"Jogo 1 (Mais sorteados):        {jogos_gerados['jogo1_mais_sorteados']}\n")
+            f.write(f"Jogo 2 (Menos sorteados):       {jogos_gerados['jogo2_menos_sorteados']}\n")
+            f.write(f"Jogo 3 (Padrão/Probabilid.):    {jogos_gerados['jogo3_probabilidade']}\n")
+            f.write(f"Jogo 4 (Equilíbrio Par/Ímpar):  {jogos_gerados['jogo4_pares_impares']}\n")
+            f.write(f"Jogo 5 (Repetições):            {jogos_gerados['jogo5_repeticoes']}\n")
+            f.write(f"Jogo 6 (Distribuição Espacial): {jogos_gerados['jogo6_distribuicao']}\n")
+            f.write(f"Jogo 7 (Scoring Multifatorial): {jogos_gerados['jogo7_scoring']}\n")
+            f.write(f"Jogo 8 (Clusterizacao Kmeans):  {jogos_gerados['jogo8_clusterizacao_kmeans']}\n")
+            f.write(f"Jogo 9 (Series Temporais Lstm): {jogos_gerados['jogo9_series_temporais_lstm']}\n")
         
-        print("\n✅ Jogos salvos em 'jogos_gerados.txt'")
+        print("\n✅ Jogos gerados e salvos em 'jogos_gerados.txt'")
         
     except FileNotFoundError:
         print(f"❌ Erro: Arquivo '{arquivo_entrada}' não encontrado!")

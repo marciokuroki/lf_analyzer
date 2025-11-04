@@ -2,9 +2,10 @@ import pytest
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from unittest.mock import MagicMock
 
 # Importa a classe que queremos testar
-from lotofacil_analyzer import AnalisadorLotofacil
+from lotofacil_analyzer import AnalisadorLotofacil, TENSORFLOW_AVAILABLE
 
 # Conteúdo do CSV falso que será usado nos testes.
 # Usamos um histórico pequeno e controlado para ter resultados previsíveis.
@@ -168,6 +169,83 @@ def test_jogo_machine_learning_scoring(analisador_mock: AnalisadorLotofacil):
     # O resultado deve sempre conter 15 números únicos.
     assert len(resultado) == 15
     assert len(set(resultado)) == 15
+
+
+def test_jogo_clusterizacao_kmeans(analisador_mock: AnalisadorLotofacil):
+    """
+    Testa a lógica de clusterização com K-Means.
+    Como o random_state está fixo, o resultado é determinístico.
+    """
+    # Modificamos o método diretamente na instância do mock para usar
+    # um número de clusters menor que o número de amostras (3).
+    # Isso evita o erro do K-Means e permite testar a lógica principal.
+    from functools import partial
+    analisador_mock.jogo_clusterizacao_kmeans = partial(
+        analisador_mock.jogo_clusterizacao_kmeans, n_clusters_override=2
+    )
+    resultado, detalhes = analisador_mock.jogo_clusterizacao_kmeans()
+
+    # 1. Verifica a estrutura do retorno
+    assert isinstance(resultado, list)
+    assert isinstance(detalhes, list)
+
+    # 2. Verifica se o jogo gerado tem o tamanho correto
+    assert len(resultado) == 15
+    assert len(set(resultado)) == 15
+
+    # 3. Verifica se os números mais comuns do mock (1, 2, 3) estão no resultado,
+    #    pois eles influenciam fortemente os centróides.
+    assert 1 in resultado
+    assert 2 in resultado
+    assert 3 in resultado
+
+
+@pytest.mark.skipif(not TENSORFLOW_AVAILABLE, reason="TensorFlow não está instalado")
+def test_jogo_series_temporais_lstm_sucesso(analisador_mock: AnalisadorLotofacil, monkeypatch):
+    """
+    Testa o caminho de sucesso do modelo LSTM, zombando (mocking) do treinamento e da previsão.
+    Isso torna o teste rápido e determinístico.
+    """
+    # 1. Criar um histórico longo o suficiente para o LSTM
+    # A função requer `sequence_length + 1` (10 + 1 = 11) jogos.
+    analisador_mock.historico_numeros = [
+        list(range(i, i + 15)) for i in range(1, 12)
+    ]
+
+    # 2. Mockar o modelo Keras para evitar o treinamento real
+    mock_model = MagicMock()
+    # O método predict deve retornar um array de 25 probabilidades
+    mock_predict_result = np.linspace(1, 0, 25) # Cria um array [1.0, 0.96, ..., 0.0]
+    mock_model.predict.return_value = np.array([mock_predict_result])
+
+    # Mockar a classe Sequential para que ela retorne nosso mock_model
+    mock_sequential = MagicMock(return_value=mock_model)
+    monkeypatch.setattr('lotofacil_analyzer.Sequential', mock_sequential)
+
+    # 3. Executar a função
+    resultado, detalhes = analisador_mock.jogo_series_temporais_lstm()
+
+    # 4. Verificar os resultados
+    assert len(resultado) == 15
+    assert len(set(resultado)) == 15
+    # Com nosso resultado de previsão mockado, os números de 1 a 15 devem ser selecionados
+    assert resultado == list(range(1, 16))
+    assert "Treinamento concluído." in detalhes
+    # Verifica se o modelo foi compilado e treinado (mesmo que de forma mockada)
+    mock_model.compile.assert_called_once()
+    mock_model.fit.assert_called_once()
+    mock_model.predict.assert_called_once()
+
+
+def test_jogo_series_temporais_lstm_historia_insuficiente(analisador_mock: AnalisadorLotofacil):
+    """Testa o comportamento do LSTM quando o histórico é muito curto."""
+    # O mock padrão tem apenas 3 jogos, e o LSTM precisa de 11.
+    resultado, detalhes = analisador_mock.jogo_series_temporais_lstm()
+    if TENSORFLOW_AVAILABLE:
+        assert resultado == []
+        assert "Histórico insuficiente." in detalhes[0]
+    else:
+        assert "TensorFlow não está instalado." in detalhes[0]
 
 
 @pytest.fixture
