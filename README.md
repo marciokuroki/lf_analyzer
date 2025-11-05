@@ -1,11 +1,11 @@
 # lf_analyzer
 Analisador dos resultados da Lotofacil
 
-Funcionalidades:
+## Tipos de Análise
+
 Jogo 1 - Números Mais Sorteados
 Analisa o histórico completo e seleciona os 15 números que mais apareceram.
-Jogo 2 - Números Menos Sorteados
-Seleciona os 15 números que menos apareceram no histórico.
+
 Jogo 3 - Probabilidade por Padrão (o mais interessante!)
 Este analisa para cada número:
 
@@ -18,11 +18,10 @@ Se está "devendo" aparecer (passou do tempo médio ausente)
 Se está em uma sequência esperada de aparições
 Frequência histórica geral
 
-📊 Novos Jogos Adicionados:
-Jogo 4 - Equilíbrio Pares/Ímpares
+---
 
+Jogo 4 - Equilíbrio Pares/Ímpares
 Analisa a distribuição histórica de pares e ímpares
-Raramente saem 15 pares ou 15 ímpares
 Identifica o equilíbrio mais comum (ex: 8 pares e 7 ímpares)
 Seleciona os números mais frequentes respeitando essa proporção
 
@@ -48,7 +47,22 @@ Sistema de pontuação que combina:
 20% - Números "quentes" (últimos 5 sorteios)
 
 Este é um modelo híbrido que pondera diferentes critérios estatísticos!
-🎯 Por que esses critérios são relevantes:
+
+---
+
+### 🤖 Análises Avançadas (Machine Learning):
+
+Jogo 8 - Clusterização (K-Means)
+*   Agrupa os sorteios históricos em "clusters" de jogos parecidos.
+*   Identifica o maior cluster (o padrão de jogo mais comum).
+*   Gera um novo jogo baseado no "jogo médio" (centróide) desse cluster.
+
+Jogo 9 - Séries Temporais (LSTM) ⭐⭐ (O MAIS AVANÇADO)
+*   Utiliza uma rede neural (LSTM) para aprender com a sequência de sorteios.
+*   Trata o histórico como uma série temporal para prever as probabilidades de cada número no próximo sorteio.
+*   Requer a biblioteca `tensorflow` instalada.
+
+---
 
 Equilíbrio: Jogos muito extremos (todos pares, todos de uma faixa) são estatisticamente raros
 Repetições: Há padrões de quantos números tendem a repetir
@@ -59,4 +73,4 @@ Agora é só:
 
 Salvar seu arquivo CSV completo (por exemplo: lotofacil.csv)
 Executar o código:
-''' python lotofacil_analyzer.py '''
+``` python lotofacil_analyzer.py ```
